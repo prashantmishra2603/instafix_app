@@ -363,6 +363,33 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> updateProfile(Map<String, dynamic> data) async {
+    _isLoading = true;
+    notifyListeners();
+
+    // Optimistic UI update
+    if (_currentUser != null) {
+      _currentUser = User(
+        id: _currentUser!.id,
+        name: data['name'] ?? _currentUser!.name,
+        phone: _currentUser!.phone, // read-only
+        email: _currentUser!.email, // read-only
+        role: _currentUser!.role,
+        shopName: data['shop_name'] ?? _currentUser!.shopName,
+        skills: data['skills'] ?? _currentUser!.skills,
+        address: data['address'] ?? _currentUser!.address,
+        token: _currentUser!.token,
+      );
+      await _saveUserLocally(_currentUser!);
+    }
+
+    bool success = await ApiService.updateProfile(data);
+
+    _isLoading = false;
+    notifyListeners();
+    return success;
+  }
+
   Future<void> logout() async {
     _currentUser = null;
     _pendingSignupData = null;

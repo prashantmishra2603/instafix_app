@@ -40,6 +40,8 @@ class AuthProvider extends ChangeNotifier {
       final email = prefs.getString('user_email');
       final phone = prefs.getString('user_phone') ?? '';
       final shop  = prefs.getString('shop_name');
+      final skills = prefs.getString('user_skills');
+      final address = prefs.getString('user_address');
       final id    = prefs.getInt('user_id') ?? 0;
 
       if (token != null && token.isNotEmpty && role == 'technician') {
@@ -51,6 +53,8 @@ class AuthProvider extends ChangeNotifier {
           email: email,
           role: role,
           shopName: shop,
+          skills: skills,
+          address: address,
           token: token,
         );
       }
@@ -237,6 +241,8 @@ class AuthProvider extends ChangeNotifier {
     if (user.email != null) await prefs.setString('user_email', user.email!);
     if (user.phone.isNotEmpty) await prefs.setString('user_phone', user.phone);
     if (user.shopName != null) await prefs.setString('shop_name', user.shopName!);
+    if (user.skills != null) await prefs.setString('user_skills', user.skills!);
+    if (user.address != null) await prefs.setString('user_address', user.address!);
   }
 
   void switchRole(String role) {
@@ -254,6 +260,52 @@ class AuthProvider extends ChangeNotifier {
       );
     }
     notifyListeners();
+  }
+
+  // ── Update Profile (name, phone, shop, skills, address — email not editable) ──
+  Future<bool> updateProfile({
+    required String name,
+    required String phone,
+    String? shopName,
+    String? skills,
+    String? address,
+  }) async {
+    if (_currentUser == null) return false;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await ApiService.updateProfile(
+        name: name,
+        phone: phone,
+        shopName: shopName,
+        skills: skills,
+        address: address,
+      );
+
+      if (result['success'] == true) {
+        _currentUser = User(
+          id: _currentUser!.id,
+          name: name,
+          phone: phone,
+          email: _currentUser!.email,
+          role: _currentUser!.role,
+          shopName: shopName?.isNotEmpty == true ? shopName : _currentUser!.shopName,
+          skills: skills?.isNotEmpty == true ? skills : _currentUser!.skills,
+          address: address?.isNotEmpty == true ? address : _currentUser!.address,
+          profileImage: _currentUser!.profileImage,
+          token: _currentUser!.token,
+        );
+        await _saveSession(_currentUser!);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {}
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   Future<void> logout() async {

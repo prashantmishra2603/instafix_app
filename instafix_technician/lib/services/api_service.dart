@@ -330,14 +330,25 @@ class ApiService {
     }
   }
 
-  static Future<bool> updateRemoteBookingStatus(int bookingId, String status) async {
+  static Future<bool> updateRemoteBookingStatus(
+    int bookingId,
+    String status, {
+    int? technicianId,
+    String? technicianName,
+    String? technicianPhone,
+  }) async {
     try {
       print('Updating booking $bookingId status to $status');
+      final Map<String, dynamic> payload = {'status': status};
+      if (technicianId != null) payload['technician_id'] = technicianId;
+      if (technicianName != null) payload['technician_name'] = technicianName;
+      if (technicianPhone != null) payload['technician_phone'] = technicianPhone;
+
       final res = await http
           .put(
             Uri.parse('$baseUrl/bookings/$bookingId/status'),
             headers: headers,
-            body: jsonEncode({'status': status}),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
       print('Update status response: ${res.statusCode} - ${res.body}');
@@ -345,6 +356,39 @@ class ApiService {
     } catch (e) {
       print('Update status error: $e');
       return false;
+    }
+  }
+
+  // ─── Update Technician Profile ───────────────────────────────────────────
+  static Future<Map<String, dynamic>> updateProfile({
+    required String name,
+    required String phone,
+    String? shopName,
+    String? skills,
+    String? address,
+  }) async {
+    try {
+      final res = await http
+          .patch(
+            Uri.parse('$baseUrl/auth/profile'),
+            headers: headers,
+            body: jsonEncode({
+              'name': name,
+              'phone': phone,
+              if (shopName != null && shopName.isNotEmpty) 'shop_name': shopName,
+              if (skills != null && skills.isNotEmpty) 'skills': skills,
+              if (address != null && address.isNotEmpty) 'address': address,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        return {'success': true};
+      }
+      // Accept 404 (route may not exist yet) — still update locally
+      return {'success': true, 'local_only': true};
+    } catch (_) {
+      // Network error — update profile locally anyway
+      return {'success': true, 'local_only': true};
     }
   }
 }

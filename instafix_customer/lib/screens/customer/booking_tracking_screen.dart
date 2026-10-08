@@ -191,7 +191,7 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(side: const BorderSide(color: AppTheme.success)),
                     onPressed: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const InvoiceWarrantyScreen())),
+                        MaterialPageRoute(builder: (_) => InvoiceWarrantyScreen(booking: booking))),
                     icon: const Icon(Icons.receipt_long_rounded, color: AppTheme.success),
                     label: const Text('View Invoice & Warranty', style: TextStyle(color: AppTheme.success)),
                   ),
@@ -234,37 +234,121 @@ class _BookingTrackingScreenState extends State<BookingTrackingScreen> {
               decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border),
+                border: Border.all(color: booking.technicianName != null
+                    ? AppTheme.primary.withValues(alpha: 0.4)
+                    : AppTheme.border),
               ),
-              child: Row(children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppTheme.primaryLight,
-                  child: const Icon(Icons.person_rounded, color: AppTheme.primary, size: 30),
-                ),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(booking.technicianName ?? 'Awaiting Assignment',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textDark)),
-                  const SizedBox(height: 2),
-                  booking.technicianName != null
-                      ? const Row(children: [
-                          Icon(Icons.star_rounded, color: Colors.amber, size: 16),
-                          SizedBox(width: 4),
-                          Text('Certified Instafix Technician',
-                              style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-                        ])
-                      : const Text('Will be assigned shortly',
-                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-                ])),
-                if (booking.technicianPhone != null)
-                  IconButton.filledTonal(
-                    style: IconButton.styleFrom(backgroundColor: AppTheme.primaryLight),
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Calling ${booking.technicianPhone}...'))),
-                    icon: const Icon(Icons.call_rounded, color: AppTheme.primary),
-                  ),
-              ]),
+              child: booking.technicianName != null && booking.technicianName!.isNotEmpty
+                  ? Column(
+                      children: [
+                        Row(children: [
+                          CircleAvatar(
+                            radius: 26,
+                            backgroundColor: AppTheme.primary.withValues(alpha: 0.15),
+                            child: Text(
+                              booking.technicianName![0].toUpperCase(),
+                              style: const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 20),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(booking.technicianName!,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textDark)),
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              const Icon(Icons.verified_rounded, color: AppTheme.success, size: 14),
+                              const SizedBox(width: 4),
+                              const Text('Certified InstaFix Partner',
+                                  style: TextStyle(fontSize: 12, color: AppTheme.success, fontWeight: FontWeight.w600)),
+                            ]),
+                            if (booking.technicianPhone != null && booking.technicianPhone!.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Row(children: [
+                                const Icon(Icons.phone_rounded, size: 12, color: AppTheme.textMuted),
+                                const SizedBox(width: 4),
+                                Text(booking.technicianPhone!,
+                                    style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                              ]),
+                            ],
+                          ])),
+                          if (booking.technicianPhone != null && booking.technicianPhone!.isNotEmpty)
+                            IconButton.filledTonal(
+                              style: IconButton.styleFrom(backgroundColor: AppTheme.primaryLight),
+                              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Calling ${booking.technicianPhone}...'))),
+                              icon: const Icon(Icons.call_rounded, color: AppTheme.primary),
+                            ),
+                        ]),
+                        // Technician status context
+                        if (booking.status == 'TECHNICIAN_ON_WAY' || booking.status == 'ARRIVED') ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: booking.status == 'ARRIVED'
+                                  ? AppTheme.success.withValues(alpha: 0.08)
+                                  : AppTheme.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: booking.status == 'ARRIVED'
+                                    ? AppTheme.success.withValues(alpha: 0.3)
+                                    : AppTheme.primary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  booking.status == 'ARRIVED'
+                                      ? Icons.location_on_rounded
+                                      : Icons.directions_run_rounded,
+                                  size: 16,
+                                  color: booking.status == 'ARRIVED'
+                                      ? AppTheme.success
+                                      : AppTheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  booking.status == 'ARRIVED'
+                                      ? '${booking.technicianName!.split(' ').first} has arrived at your location!'
+                                      : '${booking.technicianName!.split(' ').first} is on the way to your location',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: booking.status == 'ARRIVED'
+                                        ? AppTheme.success
+                                        : AppTheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    )
+                  : Row(children: [
+                      CircleAvatar(
+                        radius: 26,
+                        backgroundColor: AppTheme.border.withValues(alpha: 0.3),
+                        child: const Icon(Icons.person_search_rounded, color: AppTheme.textMuted, size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Awaiting Assignment',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textDark)),
+                        const SizedBox(height: 3),
+                        const Text('A certified technician will be assigned shortly',
+                            style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                      ])),
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+                      ),
+                    ]),
             ),
 
             const SizedBox(height: 28),

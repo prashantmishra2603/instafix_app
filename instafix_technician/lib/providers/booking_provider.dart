@@ -149,7 +149,12 @@ class BookingProvider extends ChangeNotifier {
         for (final remote in remoteList) {
           final idx = _bookings.indexWhere((b) => b.id == remote.id);
           if (idx != -1) {
-            if (_bookings[idx].status != remote.status) {
+            // Compare status AND other key fields to catch approval responses
+            final local = _bookings[idx];
+            if (local.status != remote.status ||
+                local.finalAmount != remote.finalAmount ||
+                local.additionalAmount != remote.additionalAmount ||
+                local.paymentStatus != remote.paymentStatus) {
               _bookings[idx] = remote;
               changed = true;
               if (remote.status == 'COMPLETED') {
@@ -297,7 +302,13 @@ class BookingProvider extends ChangeNotifier {
       _bookings[idx] = updated;
 
       // Sync status to Live Backend Database
-      ApiService.updateRemoteBookingStatus(updated.id, updated.status);
+      ApiService.updateRemoteBookingStatus(
+        updated.id, 
+        updated.status,
+        technicianId: updated.technicianId,
+        technicianName: updated.technicianName,
+        technicianPhone: updated.technicianPhone,
+      );
 
       // If completed, add warranty automatically
       if (updated.status == 'COMPLETED') {

@@ -232,7 +232,12 @@ class BookingProvider extends ChangeNotifier {
         for (final remote in remoteList) {
           final idx = _bookings.indexWhere((b) => b.id == remote.id);
           if (idx != -1) {
-            if (_bookings[idx].status != remote.status) {
+            final local = _bookings[idx];
+            if (local.status != remote.status ||
+                local.technicianName != remote.technicianName ||
+                local.finalAmount != remote.finalAmount ||
+                local.additionalAmount != remote.additionalAmount ||
+                local.paymentStatus != remote.paymentStatus) {
               _bookings[idx] = remote;
               changed = true;
               // Auto-add warranty on completion
@@ -379,22 +384,20 @@ class BookingProvider extends ChangeNotifier {
     final idx = _bookings.indexWhere((b) => b.id == bookingId);
     if (idx != -1) {
       final current = _bookings[idx];
-      if (current.diagnostic != null) {
-        final diag = current.diagnostic!;
-        final addAmt = diag.additionalAmount ?? 0.0;
-        final newFinal = approved ? (current.estimateAmount + addAmt) : current.estimateAmount;
+      final diag = current.diagnostic;
+      final addAmt = diag?.additionalAmount ?? 799.0; // fallback if null
+      final newFinal = approved ? (current.estimateAmount + addAmt) : current.estimateAmount;
 
-        _bookings[idx] = current.copyWith(
-          status: 'REPAIRING',
-          additionalAmount: approved ? addAmt : 0.0,
-          finalAmount: newFinal,
-          diagnostic: diag,
-        );
-        notifyListeners();
+      _bookings[idx] = current.copyWith(
+        status: 'REPAIRING',
+        additionalAmount: approved ? addAmt : 0.0,
+        finalAmount: newFinal,
+        diagnostic: diag,
+      );
+      notifyListeners();
 
-        // Sync status to backend
-        ApiService.updateRemoteBookingStatus(bookingId, 'REPAIRING');
-      }
+      // Sync status to backend
+      ApiService.updateRemoteBookingStatus(bookingId, 'REPAIRING');
     }
   }
 

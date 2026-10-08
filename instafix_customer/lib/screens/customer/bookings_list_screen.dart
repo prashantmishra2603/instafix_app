@@ -143,6 +143,14 @@ class _BookingCard extends StatelessWidget {
               const SizedBox(width: 5),
               Text(booking.scheduledSlot, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
             ]),
+            if (booking.technicianName != null && booking.technicianName!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                const Icon(Icons.engineering_rounded, size: 13, color: AppTheme.primary),
+                const SizedBox(width: 5),
+                Text('Assigned to ${booking.technicianName}', style: const TextStyle(fontSize: 12, color: AppTheme.primary, fontWeight: FontWeight.w600)),
+              ]),
+            ],
             const SizedBox(height: 14),
             _ActionButton(booking: booking),
           ]),

@@ -87,8 +87,8 @@ class TechnicianProvider extends ChangeNotifier {
       status: 'TECHNICIAN_ASSIGNED',
       technicianId: technicianId ?? 2,
       technicianName: (technicianName != null && technicianName.trim().isNotEmpty)
-          ? '${technicianName.trim()} (You)'
-          : (booking.technicianName ?? 'Technician (You)'),
+          ? technicianName.trim()
+          : (booking.technicianName ?? 'Technician'),
       technicianPhone: technicianPhone ?? booking.technicianPhone ?? '+91 91234 56789',
     );
     bookingProvider.updateBooking(updated);

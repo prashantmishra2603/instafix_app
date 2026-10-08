@@ -297,4 +297,20 @@ class ApiService {
       return false;
     }
   }
+
+  // ─── Profile Update ────────────────────────────────────────────────────────
+  static Future<bool> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final res = await http
+          .patch(
+            Uri.parse('$baseUrl/auth/profile'),
+            headers: headers,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 15));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }

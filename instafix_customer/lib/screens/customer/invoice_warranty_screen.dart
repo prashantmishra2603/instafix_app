@@ -3,16 +3,43 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
+import '../../models/booking.dart';
 import '../../models/warranty.dart';
 
 class InvoiceWarrantyScreen extends StatelessWidget {
-  const InvoiceWarrantyScreen({super.key});
+  final Booking? booking;
+  const InvoiceWarrantyScreen({super.key, this.booking});
 
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).currentUser;
     final bookingProvider = Provider.of<BookingProvider>(context);
     final warranties = bookingProvider.getWarrantiesForUser(user);
+
+    // Use the passed booking or find the first completed booking
+    final b = booking ?? 
+      bookingProvider.bookings.firstWhere(
+        (bk) => bk.status == 'COMPLETED',
+        orElse: () => bookingProvider.bookings.isNotEmpty ? bookingProvider.bookings.first : Booking(
+          id: 0,
+          bookingNumber: 'N/A',
+          customerId: 0,
+          customerName: 'Customer',
+          customerPhone: '',
+          deviceCategory: '',
+          brandName: 'N/A',
+          modelName: 'N/A',
+          serviceName: 'N/A',
+          partOptionName: '',
+          addressLine: '',
+          scheduledSlot: '',
+          status: 'COMPLETED',
+          estimateAmount: 0.0,
+          finalAmount: 0.0,
+          paymentStatus: 'PAID',
+          createdAt: '',
+        ),
+      );
 
     return DefaultTabController(
       length: 2,
@@ -133,7 +160,7 @@ class InvoiceWarrantyScreen extends StatelessWidget {
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.primary),
                             ),
                             const SizedBox(height: 2),
-                            Text('Invoice #INV-2026-8819', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                            Text('Invoice #${b.bookingNumber}', style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                           ],
                         ),
                         Container(
@@ -153,22 +180,24 @@ class InvoiceWarrantyScreen extends StatelessWidget {
 
                     const Divider(height: 32),
 
-                    _buildInvoiceRow('Customer', Provider.of<AuthProvider>(context, listen: false).currentUser?.name ?? 'Customer'),
+                    _buildInvoiceRow('Customer', b.customerName.isNotEmpty ? b.customerName : 'Customer'),
                     const SizedBox(height: 8),
-                    _buildInvoiceRow('Device', 'Samsung Galaxy S23'),
+                    _buildInvoiceRow('Device', '${b.brandName} ${b.modelName}'),
                     const SizedBox(height: 8),
-                    _buildInvoiceRow('Date', '2026-09-25 11:30 AM'),
+                    _buildInvoiceRow('Date', b.createdAt.isNotEmpty ? b.createdAt : 'Today'),
                     const SizedBox(height: 8),
-                    _buildInvoiceRow('Technician', 'InstaFix Certified Tech'),
+                    _buildInvoiceRow('Technician', b.technicianName?.isNotEmpty == true ? b.technicianName! : 'InstaFix Certified Tech'),
 
                     const Divider(height: 32),
 
                     const Text('Line Items Breakdown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const SizedBox(height: 12),
 
-                    _buildLineItem('Original OEM Battery Module', '₹1,699.00'),
-                    const SizedBox(height: 8),
-                    _buildLineItem('Doorstep Labor & Pre-Check', '₹300.00'),
+                    _buildLineItem(b.serviceName, '₹${b.estimateAmount.toStringAsFixed(2)}'),
+                    if ((b.additionalAmount ?? 0) > 0) ...[
+                      const SizedBox(height: 8),
+                      _buildLineItem('Additional Work', '₹${b.additionalAmount!.toStringAsFixed(2)}'),
+                    ],
                     const SizedBox(height: 8),
                     _buildLineItem('Doorstep Convenience Fee', 'FREE'),
                     const SizedBox(height: 8),
@@ -180,9 +209,9 @@ class InvoiceWarrantyScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const Text(
-                          '₹1,999.00',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppTheme.primary),
+                        Text(
+                          '₹${b.finalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppTheme.primary),
                         ),
                       ],
                     ),
