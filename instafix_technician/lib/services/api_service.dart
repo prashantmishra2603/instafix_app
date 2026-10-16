@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../models/user.dart';
 import '../models/device.dart';
 import '../models/service.dart';
@@ -390,5 +392,146 @@ class ApiService {
       // Network error — update profile locally anyway
       return {'success': true, 'local_only': true};
     }
+  }
+
+  // ─── KYC & Admin Payment Settings API ──────────────────────────────────────
+  /// Fetches Admin UPI ID, QR code image URL, and ₹199 subscription fee
+  static Future<Map<String, dynamic>> getPaymentSettings() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/kyc/payment-info'), headers: headers)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {
+      print('getPaymentSettings error: $e');
+    }
+    return {
+      'upi_id': 'instafix@okaxis',
+      'qr_image_url': '',
+      'kyc_fee': '199',
+    };
+  }
+
+  /// Submits technician KYC documents and payment screenshot to the server
+  static Future<Map<String, dynamic>> submitKycRemote({
+    required int userId,
+    required String aadhaarNumber,
+    required String panNumber,
+    required String bikeNumber,
+    String? aadhaarFrontUrl,
+    String? aadhaarBackUrl,
+    String? panCardUrl,
+    String? bikeRcUrl,
+    String? paymentScreenshotUrl,
+  }) async {
+    try {
+      final payload = {
+        'user_id': userId,
+        'aadhaar_number': aadhaarNumber,
+        'pan_number': panNumber,
+        'bike_number': bikeNumber,
+        if (aadhaarFrontUrl != null) 'aadhaar_front_url': aadhaarFrontUrl,
+        if (aadhaarBackUrl != null) 'aadhaar_back_url': aadhaarBackUrl,
+        if (panCardUrl != null) 'pan_card_url': panCardUrl,
+        if (bikeRcUrl != null) 'bike_rc_url': bikeRcUrl,
+        if (paymentScreenshotUrl != null) 'payment_screenshot_url': paymentScreenshotUrl,
+      };
+
+      final res = await http
+          .post(
+            Uri.parse('$baseUrl/kyc/submit'),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return {'success': true, 'data': jsonDecode(res.body)};
+      }
+      return {'success': false, 'error': res.body};
+    } catch (e) {
+      print('submitKycRemote error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// Polls / checks current KYC verification status from backend
+  static Future<Map<String, dynamic>?> fetchKycStatusRemote(int userId) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/kyc/status/$userId'), headers: headers)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body);
+      }
+    } catch (e) {
+      print('fetchKycStatusRemote error: $e');
+    }
+    return null;
+  }
+
+  /// Upload an image using raw bytes — works seamlessly across Flutter Web, Android, iOS.
+  /// Returns the public URL of the uploaded image.
+  static Future<String?> uploadImageBytes(
+    Uint8List bytes, {
+    required String fileName,
+    String type = 'other',
+  }) async {
+    try {
+      final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
+      final mimeMap = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'webp': 'image/webp',
+        'gif': 'image/gif',
+        'pdf': 'application/pdf',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+      };
+      final mimeStr = mimeMap[ext] ?? 'image/jpeg';
+      final parts = mimeStr.split('/');
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/upload/file'),
+      );
+      if (authToken != null) {
+        request.headers['Authorization'] = 'Bearer $authToken';
+      }
+      request.fields['type'] = type;
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+        contentType: MediaType(parts[0], parts[1]),
+      ));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['url'] != null) {
+          return data['url'] as String;
+        }
+        print('uploadImageBytes: bad response: ${response.body}');
+      } else {
+        print('uploadImageBytes: HTTP ${response.statusCode} => ${response.body}');
+      }
+    } catch (e) {
+      print('uploadImageBytes error: $e');
+    }
+    return null;
+  }
+
+  /// Backward-compatible alias that takes bytes or delegates.
+  static Future<String?> uploadImageFile(String filePath, {String type = 'other', Uint8List? bytes, String? fileName}) async {
+    if (bytes != null) {
+      return uploadImageBytes(bytes, fileName: fileName ?? 'upload.jpg', type: type);
+    }
+    return null;
   }
 }

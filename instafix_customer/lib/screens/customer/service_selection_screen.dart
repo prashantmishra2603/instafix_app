@@ -3,10 +3,29 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/booking_provider.dart';
 import '../../services/mock_data_service.dart';
+import '../../services/api_service.dart';
+import '../../models/service.dart';
 import 'booking_checkout_screen.dart';
 
-class ServiceSelectionScreen extends StatelessWidget {
+class ServiceSelectionScreen extends StatefulWidget {
   const ServiceSelectionScreen({super.key});
+
+  @override
+  State<ServiceSelectionScreen> createState() => _ServiceSelectionScreenState();
+}
+
+class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
+  List<RepairService>? _apiServices;
+
+  @override
+  void initState() {
+    super.initState();
+    ApiService.getServices().then((list) {
+      if (mounted && list.isNotEmpty) {
+        setState(() => _apiServices = list);
+      }
+    });
+  }
 
   IconData _categoryIcon(String categoryId) {
     switch (categoryId) {
@@ -45,7 +64,7 @@ class ServiceSelectionScreen extends StatelessWidget {
     final brandName  = bp.selectedBrand?.name ?? '';
     final modelName  = bp.selectedModel?.name ?? 'Device';
     final deviceLabel = brandName.isNotEmpty ? '$brandName $modelName' : modelName;
-    final services   = MockDataService.services.where((s) => s.deviceCategory == categoryId).toList();
+    final services   = (_apiServices ?? MockDataService.services).where((s) => s.deviceCategory == categoryId).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Select Service & Part')),

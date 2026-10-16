@@ -6,6 +6,7 @@ import '../../providers/booking_provider.dart';
 import '../../providers/technician_provider.dart';
 import '../../models/booking.dart';
 import 'technician_job_detail_screen.dart';
+import 'technician_kyc_screen.dart';
 
 class TechnicianDashboardScreen extends StatefulWidget {
   const TechnicianDashboardScreen({super.key});
@@ -37,6 +38,10 @@ class _TechnicianDashboardScreenState
       final bp = context.read<BookingProvider>();
       bp.fetchBookings();
       bp.startPolling();
+      final auth = context.read<AuthProvider>();
+      if (auth.currentUser != null) {
+        context.read<TechnicianProvider>().fetchKycStatusFromApi(auth.currentUser!.id);
+      }
     });
   }
 
@@ -173,6 +178,9 @@ class _TechnicianDashboardScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // KYC Verification Status Banner
+                    _kycStatusBanner(tech),
+
                     // Earnings Hero Card
                     _earningsHeroCard(tech, bp),
                     const SizedBox(height: 16),
@@ -261,6 +269,131 @@ class _TechnicianDashboardScreenState
     if (h < 12) return 'Good Morning';
     if (h < 17) return 'Good Afternoon';
     return 'Good Evening';
+  }
+
+  Widget _kycStatusBanner(TechnicianProvider tech) {
+    final kyc = tech.kyc;
+    final isVerified = kyc.isVerified;
+    final isPending = kyc.isPending;
+
+    Color borderCol = isVerified
+        ? AppTheme.success.withValues(alpha: 0.3)
+        : (isPending
+            ? AppTheme.warning.withValues(alpha: 0.3)
+            : const Color(0xFFEF4444).withValues(alpha: 0.3));
+
+    Color bgCol = isVerified
+        ? AppTheme.success.withValues(alpha: 0.08)
+        : (isPending
+            ? AppTheme.warning.withValues(alpha: 0.08)
+            : const Color(0xFFEF4444).withValues(alpha: 0.08));
+
+    IconData icon = isVerified
+        ? Icons.verified_user_rounded
+        : (isPending ? Icons.hourglass_top_rounded : Icons.shield_outlined);
+
+    Color accentCol = isVerified
+        ? AppTheme.success
+        : (isPending ? AppTheme.warning : const Color(0xFFF87171));
+
+    String title = isVerified
+        ? 'KYC Verified Partner'
+        : (isPending ? 'KYC Under Admin Review' : 'KYC Verification Required');
+
+    String subtitle = isVerified
+        ? 'Aadhaar, PAN & Bike verified • Authorized to accept jobs'
+        : (isPending
+            ? 'Documents submitted • Waiting for Admin approval'
+            : 'Upload Aadhaar, PAN & Bike No. to accept repair jobs');
+
+    String actionLabel =
+        isVerified ? 'View' : (isPending ? 'Status' : 'Verify Now');
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TechnicianKycScreen()),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: bgCol,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderCol),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: accentCol.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: accentCol, size: 17),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: accentCol,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (isVerified) ...[
+                        const SizedBox(width: 5),
+                        const Icon(Icons.check_circle_rounded,
+                            size: 14, color: AppTheme.success),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                        color: AppTheme.textMuted, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: accentCol.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: accentCol.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    actionLabel,
+                    style: TextStyle(
+                      color: accentCol,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded,
+                      color: accentCol, size: 14),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _earningsHeroCard(TechnicianProvider tech, BookingProvider bp) {

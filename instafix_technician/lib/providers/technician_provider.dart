@@ -1,9 +1,195 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
 import '../models/diagnostic.dart';
+import '../models/kyc_data.dart';
+import '../services/api_service.dart';
 import 'booking_provider.dart';
 
 class TechnicianProvider extends ChangeNotifier {
+  // ── KYC State & Persistence ─────────────────────────────────────────────
+  KycData _kyc = KycData.initial();
+  bool _isKycLoading = true;
+
+  KycData get kyc => _kyc;
+  bool get isKycLoading => _isKycLoading;
+  bool get isKycVerified => _kyc.isVerified;
+
+  TechnicianProvider() {
+    _loadSavedKyc();
+  }
+
+  Future<void> _loadSavedKyc() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final status = prefs.getString('kyc_status') ?? 'NOT_SUBMITTED';
+      final aadhaar = prefs.getString('kyc_aadhaar') ?? '';
+      final pan = prefs.getString('kyc_pan') ?? '';
+      final bike = prefs.getString('kyc_bike') ?? '';
+      final aadhaarFront = prefs.getString('kyc_aadhaar_front') ?? '';
+      final aadhaarBack = prefs.getString('kyc_aadhaar_back') ?? '';
+      final panCard = prefs.getString('kyc_pan_card') ?? '';
+      final bikeRc = prefs.getString('kyc_bike_rc') ?? '';
+      final paymentScreenshot = prefs.getString('kyc_payment_screenshot') ?? '';
+      final paymentVerified = prefs.getBool('kyc_payment_verified') ?? false;
+      final submittedAt = prefs.getString('kyc_submitted_at');
+      final verifiedAt = prefs.getString('kyc_verified_at');
+      final rejectionReason = prefs.getString('kyc_rejection_reason');
+      final adminNotes = prefs.getString('kyc_admin_notes');
+
+      _kyc = KycData(
+        status: status,
+        aadhaarNumber: aadhaar,
+        aadhaarFrontUrl: aadhaarFront,
+        aadhaarBackUrl: aadhaarBack,
+        panNumber: pan,
+        panCardUrl: panCard,
+        bikeNumber: bike,
+        bikeRcUrl: bikeRc,
+        paymentScreenshotUrl: paymentScreenshot,
+        paymentVerified: paymentVerified,
+        submittedAt: submittedAt,
+        verifiedAt: verifiedAt,
+        rejectionReason: rejectionReason,
+        adminNotes: adminNotes,
+      );
+    } catch (_) {}
+    _isKycLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> submitKyc({
+    required String aadhaarNumber,
+    required String panNumber,
+    required String bikeNumber,
+    String? aadhaarFrontUrl,
+    String? aadhaarBackUrl,
+    String? panCardUrl,
+    String? bikeRcUrl,
+    String? paymentScreenshotUrl,
+    int? userId,
+  }) async {
+    final nowStr = DateTime.now().toIso8601String();
+    _kyc = KycData(
+      status: 'PENDING',
+      aadhaarNumber: aadhaarNumber.trim(),
+      aadhaarFrontUrl: aadhaarFrontUrl ?? '',
+      aadhaarBackUrl: aadhaarBackUrl ?? '',
+      panNumber: panNumber.trim().toUpperCase(),
+      panCardUrl: panCardUrl ?? '',
+      bikeNumber: bikeNumber.trim().toUpperCase(),
+      bikeRcUrl: bikeRcUrl ?? '',
+      paymentScreenshotUrl: paymentScreenshotUrl,
+      paymentVerified: false,
+      submittedAt: nowStr,
+      verifiedAt: null,
+      rejectionReason: null,
+      adminNotes: null,
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('kyc_status', _kyc.status);
+      await prefs.setString('kyc_aadhaar', _kyc.aadhaarNumber);
+      await prefs.setString('kyc_pan', _kyc.panNumber);
+      await prefs.setString('kyc_bike', _kyc.bikeNumber);
+      await prefs.setString('kyc_aadhaar_front', _kyc.aadhaarFrontUrl);
+      await prefs.setString('kyc_aadhaar_back', _kyc.aadhaarBackUrl);
+      await prefs.setString('kyc_pan_card', _kyc.panCardUrl);
+      await prefs.setString('kyc_bike_rc', _kyc.bikeRcUrl);
+      if (paymentScreenshotUrl != null) {
+        await prefs.setString('kyc_payment_screenshot', paymentScreenshotUrl);
+      }
+      await prefs.setBool('kyc_payment_verified', false);
+      await prefs.setString('kyc_submitted_at', nowStr);
+      await prefs.remove('kyc_verified_at');
+      await prefs.remove('kyc_rejection_reason');
+      await prefs.remove('kyc_admin_notes');
+
+      // Submit to backend API — wait for server response
+      final effectiveUserId = userId ?? prefs.getInt('user_id') ?? 2;
+      final res = await ApiService.submitKycRemote(
+        userId: effectiveUserId,
+        aadhaarNumber: _kyc.aadhaarNumber,
+        panNumber: _kyc.panNumber,
+        bikeNumber: _kyc.bikeNumber,
+        aadhaarFrontUrl: _kyc.aadhaarFrontUrl,
+        aadhaarBackUrl: _kyc.aadhaarBackUrl,
+        panCardUrl: _kyc.panCardUrl,
+        bikeRcUrl: _kyc.bikeRcUrl,
+        paymentScreenshotUrl: paymentScreenshotUrl,
+      );
+
+      if (res['success'] == true) {
+        _kyc = _kyc.copyWith(status: 'PENDING');
+        await prefs.setString('kyc_status', 'PENDING');
+      } else {
+        print('submitKycRemote error: ${res['error']}');
+      }
+    } catch (e) {
+      print('submitKyc exception: $e');
+    }
+
+    notifyListeners();
+    return true;
+  }
+
+  /// Polls / checks current KYC verification status from backend API.
+  /// Status only changes when Instafix Admin approves or rejects from admin panel.
+  Future<void> fetchKycStatusFromApi(int userId) async {
+    try {
+      final res = await ApiService.fetchKycStatusRemote(userId);
+      if (res != null && res['kyc_status'] != null) {
+        final status = res['kyc_status'] as String;
+        final paymentVerified = res['payment_verified'] == true || res['payment_verified'] == 1;
+        final rejection = res['rejection_reason'] as String?;
+        final verifiedAt = res['verified_at'] as String?;
+
+        _kyc = _kyc.copyWith(
+          status: status,
+          paymentVerified: paymentVerified,
+          rejectionReason: rejection,
+          verifiedAt: verifiedAt,
+        );
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('kyc_status', status);
+        await prefs.setBool('kyc_payment_verified', paymentVerified);
+        if (rejection != null) {
+          await prefs.setString('kyc_rejection_reason', rejection);
+        } else {
+          await prefs.remove('kyc_rejection_reason');
+        }
+        if (verifiedAt != null) {
+          await prefs.setString('kyc_verified_at', verifiedAt);
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      print('fetchKycStatusFromApi error: $e');
+    }
+  }
+
+  Future<void> resetKyc() async {
+    _kyc = KycData.initial();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('kyc_status');
+      await prefs.remove('kyc_aadhaar');
+      await prefs.remove('kyc_pan');
+      await prefs.remove('kyc_bike');
+      await prefs.remove('kyc_aadhaar_front');
+      await prefs.remove('kyc_aadhaar_back');
+      await prefs.remove('kyc_pan_card');
+      await prefs.remove('kyc_bike_rc');
+      await prefs.remove('kyc_submitted_at');
+      await prefs.remove('kyc_verified_at');
+      await prefs.remove('kyc_rejection_reason');
+      await prefs.remove('kyc_admin_notes');
+    } catch (_) {}
+    notifyListeners();
+  }
+
   // ── Real earnings computed from actual booking data ──────────────────────
   // No hardcoded values — all derived from BookingProvider's real bookings list.
 
@@ -76,13 +262,16 @@ class TechnicianProvider extends ChangeNotifier {
     }
   }
 
-  void acceptJob(
+  bool acceptJob(
     BookingProvider bookingProvider,
     Booking booking, {
     String? technicianName,
     String? technicianPhone,
     int? technicianId,
   }) {
+    if (!isKycVerified) {
+      return false;
+    }
     Booking updated = booking.copyWith(
       status: 'TECHNICIAN_ASSIGNED',
       technicianId: technicianId ?? 2,
@@ -93,6 +282,7 @@ class TechnicianProvider extends ChangeNotifier {
     );
     bookingProvider.updateBooking(updated);
     notifyListeners();
+    return true;
   }
 
   void markOnTheWay(BookingProvider bookingProvider, Booking booking) {

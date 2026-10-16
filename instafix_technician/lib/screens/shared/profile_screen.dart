@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
+import '../../providers/technician_provider.dart';
 import '../auth/login_screen.dart';
+import '../technician/technician_kyc_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -90,6 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final bp = context.watch<BookingProvider>();
+    final tech = context.watch<TechnicianProvider>();
     final user = auth.currentUser;
 
     final completedJobs =
@@ -516,6 +519,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                         Icons.settings_rounded, 'Account Settings'),
                     const SizedBox(height: 14),
 
+                    _settingsTile(
+                      Icons.verified_user_rounded,
+                      'KYC & Document Verification',
+                      'Aadhaar, PAN & Bike No. (${tech.kyc.statusDisplay})',
+                      tech.kyc.statusColor,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const TechnicianKycScreen()),
+                      ),
+                    ),
                     _settingsTile(
                       Icons.notifications_outlined,
                       'Job Notifications',

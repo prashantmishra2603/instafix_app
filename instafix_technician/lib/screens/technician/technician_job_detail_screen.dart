@@ -7,6 +7,7 @@ import '../../providers/technician_provider.dart';
 import '../../models/booking.dart';
 import 'pre_inspection_screen.dart';
 import 'post_qc_screen.dart';
+import 'technician_kyc_screen.dart';
 
 class TechnicianJobDetailScreen extends StatelessWidget {
   final Booking booking;
@@ -240,9 +241,20 @@ class TechnicianJobDetailScreen extends StatelessWidget {
       case 'PENDING':
       case 'CONFIRMED':
         return _btn('Accept Job Assignment', AppTheme.primaryGradient, () {
+          if (!tech.isKycVerified) {
+            _showKycRequiredDialog(ctx, tech);
+            return;
+          }
           final user = ctx.read<AuthProvider>().currentUser;
-          tech.acceptJob(bp, b, technicianName: user?.name, technicianPhone: user?.phone, technicianId: user?.id);
-          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('✅ Job accepted!')));
+          final accepted = tech.acceptJob(bp, b,
+              technicianName: user?.name,
+              technicianPhone: user?.phone,
+              technicianId: user?.id);
+          if (accepted) {
+            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('✅ Job accepted!')));
+          } else {
+            _showKycRequiredDialog(ctx, tech);
+          }
         });
       case 'TECHNICIAN_ASSIGNED':
         return _btn('Mark "On The Way"', AppTheme.primaryGradient, () {
@@ -379,5 +391,82 @@ class TechnicianJobDetailScreen extends StatelessWidget {
     if (status == 'WAITING_FOR_APPROVAL') return AppTheme.warning;
     if (status == 'PENDING' || status == 'CONFIRMED') return AppTheme.info;
     return AppTheme.primary;
+  }
+
+  void _showKycRequiredDialog(BuildContext context, TechnicianProvider tech) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.darkCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: AppTheme.warning.withValues(alpha: 0.4)),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.shield_outlined, color: AppTheme.warning, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'KYC Required to Accept',
+                style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: tech.kyc.statusColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: tech.kyc.statusColor.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                'Current Status: ${tech.kyc.statusDisplay}',
+                style: TextStyle(
+                  color: tech.kyc.statusColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Doorstep service guidelines require verified technicians. You must submit your Aadhaar, PAN card, and Bike registration, and be verified by admin before accepting customer repair jobs.',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const TechnicianKycScreen()));
+            },
+            child: const Text('Complete KYC Now', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }

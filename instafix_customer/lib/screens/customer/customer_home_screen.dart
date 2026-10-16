@@ -4,11 +4,46 @@ import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../models/device.dart';
+import '../../models/offer.dart';
+import '../../services/api_service.dart';
 import 'device_selection_screen.dart';
 import 'booking_tracking_screen.dart';
 
-class CustomerHomeScreen extends StatelessWidget {
+class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
+
+  @override
+  State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+}
+
+class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  List<Brand> _brands = [];
+  List<Offer> _offers = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHomeData();
+  }
+
+  Future<void> _loadHomeData() async {
+    try {
+      final results = await Future.wait([
+        ApiService.getBrands(),
+        ApiService.getOffers(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _brands = results[0] as List<Brand>;
+          _offers = results[1] as List<Offer>;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +57,8 @@ class CustomerHomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_isLoading)
+                const LinearProgressIndicator(minHeight: 2, color: AppTheme.primary),
               // ── Top Header ──────────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -249,6 +286,37 @@ class CustomerHomeScreen extends StatelessWidget {
                       ]),
                     ),
 
+                    // ── Exclusive Offers Section (From Admin Panel) ─────
+                    if (_offers.isNotEmpty) ...[
+                      const SizedBox(height: 28),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Row(children: [
+                          const Icon(Icons.local_offer_rounded, color: AppTheme.primary, size: 20),
+                          const SizedBox(width: 8),
+                          Text('Special Offers & Deals',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18)),
+                        ]),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: AppTheme.primaryLight, borderRadius: BorderRadius.circular(8)),
+                          child: Text('${_offers.length} ACTIVE', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                        ),
+                      ]),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 140,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _offers.length,
+                          separatorBuilder: (context, index) => const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            final offer = _offers[index];
+                            return _buildOfferCard(context, offer, bookingProvider);
+                          },
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 28),
 
                     // ── Device Categories ────────────────────────────────
@@ -332,12 +400,17 @@ class CustomerHomeScreen extends StatelessWidget {
                         crossAxisCount: 4, childAspectRatio: 1.0,
                         crossAxisSpacing: 10, mainAxisSpacing: 10,
                       ),
-                      itemCount: _homeBrands.length,
+                      itemCount: _displayBrands.length,
                       itemBuilder: (context, index) {
-                        final (name, logoUrl) = _homeBrands[index];
+                        final brandItem = _displayBrands[index];
                         return GestureDetector(
                           onTap: () {
-                            bookingProvider.selectCategory(DeviceCategory(id: 'smartphone', name: 'Smartphones', icon: 'smartphone'));
+                            if (brandItem is Brand) {
+                              bookingProvider.selectCategory(DeviceCategory(id: brandItem.category.isNotEmpty ? brandItem.category : 'smartphone', name: 'Smartphones', icon: 'smartphone'));
+                              bookingProvider.selectBrand(brandItem);
+                            } else {
+                              bookingProvider.selectCategory(DeviceCategory(id: 'smartphone', name: 'Smartphones', icon: 'smartphone'));
+                            }
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceSelectionScreen()));
                           },
                           child: Container(
@@ -350,18 +423,14 @@ class CustomerHomeScreen extends StatelessWidget {
                             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                               SizedBox(
                                 width: 36, height: 36,
-                                child: Image.network(
-                                  logoUrl,
-                                  fit: BoxFit.contain,
-                                  color: Colors.white,
-                                  colorBlendMode: BlendMode.srcIn,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.phone_iphone_rounded, color: AppTheme.primary, size: 28),
-                                ),
+                                child: _buildBrandLogo(brandItem),
                               ),
                               const SizedBox(height: 6),
-                              Text(name,
-                                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-                                  textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(
+                                brandItem is Brand ? brandItem.name : (brandItem as (String, String)).$1,
+                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                                textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              ),
                             ]),
                           ),
                         );
@@ -421,6 +490,178 @@ class CustomerHomeScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  List<dynamic> get _displayBrands {
+    if (_brands.isNotEmpty) return _brands;
+    return _homeBrands;
+  }
+
+  Widget _buildBrandLogo(dynamic brandItem) {
+    String? logoUrl;
+    String name = '';
+    if (brandItem is Brand) {
+      logoUrl = brandItem.logo;
+      name = brandItem.name;
+    } else if (brandItem is (String, String)) {
+      name = brandItem.$1;
+      logoUrl = brandItem.$2;
+    }
+
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      return Image.network(
+        logoUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Center(
+          child: Text(
+            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary),
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: Text(
+        name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary),
+      ),
+    );
+  }
+
+  Widget _buildOfferCard(BuildContext context, Offer offer, BookingProvider bookingProvider) {
+    return GestureDetector(
+      onTap: () {
+        bookingProvider.selectCategory(DeviceCategory(id: 'smartphone', name: 'Smartphones', icon: 'smartphone'));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(offer.code != null ? 'Promo code "${offer.code}" selected!' : 'Offer selected! Choose your device.'),
+            backgroundColor: AppTheme.primary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const DeviceSelectionScreen()));
+      },
+      child: Container(
+        width: 280,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            if (offer.imageUrl != null && offer.imageUrl!.isNotEmpty)
+              Positioned.fill(
+                child: Image.network(
+                  offer.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(),
+                ),
+              ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.8),
+                    Colors.black.withValues(alpha: 0.4),
+                  ],
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (offer.discountPercentage > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.amber,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${offer.discountPercentage}% OFF',
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else
+                        const SizedBox(),
+                      if (offer.code != null && offer.code!.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.white38),
+                          ),
+                          child: Text(
+                            offer.code!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        offer.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (offer.subtitle != null && offer.subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          offer.subtitle!,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 11.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

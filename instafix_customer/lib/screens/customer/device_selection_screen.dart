@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/booking_provider.dart';
 import '../../services/mock_data_service.dart';
+import '../../services/api_service.dart';
 import '../../models/device.dart';
 import 'service_selection_screen.dart';
 
@@ -22,6 +23,37 @@ class _DeviceSelectionScreenState extends State<DeviceSelectionScreen> {
 
   static const int _otherBrandId = 9999;
   static const int _otherModelId = 99999;
+
+  List<Brand>? _loadedBrands;
+  final Map<int, List<DeviceModel>> _loadedModelsByBrand = {};
+  String? _lastLoadedCategory;
+  int? _lastLoadedBrandId;
+
+  void _loadBrandsIfNeeded(String categoryId) {
+    if (_lastLoadedCategory != categoryId) {
+      _lastLoadedCategory = categoryId;
+      ApiService.getBrands(category: categoryId).then((brands) {
+        if (mounted) {
+          setState(() {
+            _loadedBrands = brands;
+          });
+        }
+      });
+    }
+  }
+
+  void _loadModelsIfNeeded(int brandId, String categoryId) {
+    if (_lastLoadedBrandId != brandId && !_loadedModelsByBrand.containsKey(brandId)) {
+      _lastLoadedBrandId = brandId;
+      ApiService.getModels(brandId, category: categoryId).then((models) {
+        if (mounted) {
+          setState(() {
+            _loadedModelsByBrand[brandId] = models;
+          });
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -100,9 +132,13 @@ class _DeviceSelectionScreenState extends State<DeviceSelectionScreen> {
   Widget build(BuildContext context) {
     final bp = Provider.of<BookingProvider>(context);
     final categoryId = bp.selectedCategory?.id ?? 'smartphone';
-    final categoryBrands = MockDataService.brands.where((b) => b.category == categoryId).toList();
+    _loadBrandsIfNeeded(categoryId);
+    final categoryBrands = _loadedBrands ?? <Brand>[];
+    if (bp.selectedBrand != null && bp.selectedBrand!.id != _otherBrandId) {
+      _loadModelsIfNeeded(bp.selectedBrand!.id, categoryId);
+    }
     final availableModels = (bp.selectedBrand != null && bp.selectedBrand!.id != _otherBrandId)
-        ? MockDataService.models.where((m) => m.category == categoryId && m.brandId == bp.selectedBrand!.id).toList()
+        ? (_loadedModelsByBrand[bp.selectedBrand!.id] ?? <DeviceModel>[])
         : <DeviceModel>[];
 
     if (bp.selectedBrand != null && bp.selectedBrand!.id != _otherBrandId && _isOtherBrandSelected) {
@@ -181,7 +217,7 @@ class _DeviceSelectionScreenState extends State<DeviceSelectionScreen> {
                         }
                         final brand = categoryBrands[index];
                         final isSelected = bp.selectedBrand?.id == brand.id;
-                        final logoUrl = _brandLogoUrl(brand.name);
+                        final logoUrl = brand.logo.isNotEmpty ? brand.logo : _brandLogoUrl(brand.name);
                         return GestureDetector(
                           onTap: () {
                             setState(() { _isOtherBrandSelected = false; _isOtherModelSelected = false; });

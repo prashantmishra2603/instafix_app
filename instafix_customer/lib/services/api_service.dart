@@ -4,6 +4,7 @@ import '../models/user.dart';
 import '../models/device.dart';
 import '../models/service.dart';
 import '../models/booking.dart';
+import '../models/offer.dart';
 import 'mock_data_service.dart';
 
 class ApiService {
@@ -209,31 +210,54 @@ class ApiService {
   }
 
   // ─── Fetch Brands ────────────────────────────────────────────────────────────
-  static Future<List<Brand>> getBrands() async {
+  /// Fetches real active brands from database (reflects admin panel additions/deletions)
+  static Future<List<Brand>> getBrands({String? category}) async {
     try {
+      final url = category != null && category.isNotEmpty
+          ? '$baseUrl/brands?category=$category'
+          : '$baseUrl/brands';
       final res = await http
-          .get(Uri.parse('$baseUrl/brands'), headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final List list = jsonDecode(res.body);
         return list.map((item) => Brand.fromJson(item)).toList();
       }
     } catch (_) {}
-    return MockDataService.brands;
+    return [];
   }
 
   // ─── Fetch Models ────────────────────────────────────────────────────────────
-  static Future<List<DeviceModel>> getModels(int brandId) async {
+  /// Fetches real device models under a brand from database
+  static Future<List<DeviceModel>> getModels(int brandId, {String? category}) async {
     try {
+      final url = category != null && category.isNotEmpty
+          ? '$baseUrl/brands/$brandId/models?category=$category'
+          : '$baseUrl/brands/$brandId/models';
       final res = await http
-          .get(Uri.parse('$baseUrl/brands/$brandId/models'), headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 12));
       if (res.statusCode == 200) {
         final List list = jsonDecode(res.body);
         return list.map((item) => DeviceModel.fromJson(item)).toList();
       }
     } catch (_) {}
-    return MockDataService.models.where((m) => m.brandId == brandId).toList();
+    return [];
+  }
+
+  // ─── Fetch Offers ────────────────────────────────────────────────────────────
+  /// Fetches real active promotional offers from database created in admin panel
+  static Future<List<Offer>> getOffers() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/offers'), headers: headers)
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final List list = jsonDecode(res.body);
+        return list.map((item) => Offer.fromJson(item)).toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   // ─── Fetch Services ──────────────────────────────────────────────────────────
