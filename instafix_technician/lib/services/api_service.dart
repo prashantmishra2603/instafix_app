@@ -10,7 +10,7 @@ import 'mock_data_service.dart';
 
 class ApiService {
   // ✅ Render Live Backend URL
-  static const String baseUrl = 'https://instafix-backend.onrender.com/api';
+  static const String baseUrl = 'https://instafix-backend-nfpz.onrender.com/api';
 
   static String? authToken;
 

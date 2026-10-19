@@ -17,14 +17,45 @@ class ServiceSelectionScreen extends StatefulWidget {
 class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   List<RepairService>? _apiServices;
 
+  // IDs used to know if we've already fetched for this brand+model combination
+  int? _loadedForBrandId;
+  int? _loadedForModelId;
+
+  static const int _otherBrandId = 9999;
+  static const int _otherModelId = 99999;
+
   @override
   void initState() {
     super.initState();
-    ApiService.getServices().then((list) {
-      if (mounted && list.isNotEmpty) {
-        setState(() => _apiServices = list);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchServices());
+  }
+
+  void _fetchServices() {
+    if (!mounted) return;
+    final bp = context.read<BookingProvider>();
+    final brandId = bp.selectedBrand?.id;
+    final modelId = bp.selectedModel?.id;
+
+    // For "Other" brand/model, fall back to the full services list
+    final useModelSpecific = brandId != null &&
+        modelId != null &&
+        brandId != _otherBrandId &&
+        modelId != _otherModelId;
+
+    if (useModelSpecific) {
+      if (brandId == _loadedForBrandId && modelId == _loadedForModelId) {
+        return; // already loaded for this combination
       }
-    });
+      _loadedForBrandId = brandId;
+      _loadedForModelId = modelId;
+      ApiService.getModelServices(brandId, modelId).then((list) {
+        if (mounted) setState(() => _apiServices = list);
+      });
+    } else {
+      ApiService.getServices().then((list) {
+        if (mounted && list.isNotEmpty) setState(() => _apiServices = list);
+      });
+    }
   }
 
   IconData _categoryIcon(String categoryId) {
@@ -64,7 +95,9 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
     final brandName  = bp.selectedBrand?.name ?? '';
     final modelName  = bp.selectedModel?.name ?? 'Device';
     final deviceLabel = brandName.isNotEmpty ? '$brandName $modelName' : modelName;
-    final services   = (_apiServices ?? MockDataService.services).where((s) => s.deviceCategory == categoryId).toList();
+    final List<RepairService> services = _apiServices != null
+        ? _apiServices!
+        : MockDataService.services.where((s) => s.deviceCategory == categoryId).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Select Service & Part')),

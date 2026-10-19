@@ -16,13 +16,21 @@ class PartOption {
   });
 
   factory PartOption.fromJson(Map<String, dynamic> json) {
+    final parsedId = json['id'] is int ? json['id'] as int : int.tryParse(json['id']?.toString() ?? '') ?? 0;
+    final parsedServiceId = json['service_id'] is int
+        ? json['service_id'] as int
+        : int.tryParse((json['service_id'] ?? 1).toString()) ?? 1;
+    final parsedPrice = json['price'] is num
+        ? (json['price'] as num).toDouble()
+        : double.tryParse(json['price']?.toString() ?? '') ?? 0.0;
+
     return PartOption(
-      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
-      serviceId: json['service_id'] is int ? json['service_id'] : int.parse((json['service_id'] ?? 1).toString()),
+      id: parsedId,
+      serviceId: parsedServiceId,
       name: json['name'] ?? 'Standard Part',
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      price: parsedPrice,
       warrantyPeriod: json['warranty_period'] ?? '3 Months',
-      isPopular: json['is_popular'] == true || json['is_popular'] == 1,
+      isPopular: json['is_popular'] == true || json['is_popular'] == 1 || json['is_popular'] == '1',
     );
   }
 }
@@ -37,6 +45,7 @@ class RepairService {
   final double basePrice;
   final int warrantyDays;
   final String icon;
+  final String repairCategory;
   final List<PartOption> partOptions;
 
   RepairService({
@@ -49,14 +58,21 @@ class RepairService {
     required this.basePrice,
     required this.warrantyDays,
     required this.icon,
+    this.repairCategory = 'General',
     this.partOptions = const [],
   });
 
   factory RepairService.fromJson(Map<String, dynamic> json) {
     var partOptsJson = json['part_options'] as List? ?? [];
     List<PartOption> opts = partOptsJson.map((x) => PartOption.fromJson(x)).toList();
-    final serviceId = json['id'] is int ? json['id'] : int.parse(json['id'].toString());
-    final base = (json['base_price'] as num?)?.toDouble() ?? 0.0;
+    
+    final serviceId = json['id'] is int
+        ? json['id'] as int
+        : int.tryParse(json['id']?.toString() ?? '') ?? 0;
+        
+    final base = json['base_price'] is num
+        ? (json['base_price'] as num).toDouble()
+        : double.tryParse(json['base_price']?.toString() ?? '') ?? 0.0;
 
     if (opts.isEmpty && base > 0) {
       opts = [
@@ -78,16 +94,29 @@ class RepairService {
       ];
     }
 
+    final parsedWarranty = json['warranty_days'] is int
+        ? json['warranty_days'] as int
+        : int.tryParse((json['warranty_days'] ?? 90).toString()) ?? 90;
+
+    final parsedBrandId = json['brand_id'] != null
+        ? (json['brand_id'] is int ? json['brand_id'] as int : int.tryParse(json['brand_id'].toString()))
+        : null;
+
+    final parsedModelId = json['model_id'] != null
+        ? (json['model_id'] is int ? json['model_id'] as int : int.tryParse(json['model_id'].toString()))
+        : null;
+
     return RepairService(
       id: serviceId,
-      deviceCategory: json['device_category'] ?? json['category']?.toString().toLowerCase() ?? 'smartphone',
-      brandId: json['brand_id'] != null ? (json['brand_id'] is int ? json['brand_id'] : int.parse(json['brand_id'].toString())) : null,
-      modelId: json['model_id'] != null ? (json['model_id'] is int ? json['model_id'] : int.parse(json['model_id'].toString())) : null,
+      deviceCategory: json['device_category'] ?? 'smartphone',
+      brandId: parsedBrandId,
+      modelId: parsedModelId,
       name: json['name'] ?? '',
       description: json['description'] ?? '',
       basePrice: base,
-      warrantyDays: json['warranty_days'] is int ? json['warranty_days'] : int.parse((json['warranty_days'] ?? 90).toString()),
+      warrantyDays: parsedWarranty,
       icon: json['icon'] ?? 'build',
+      repairCategory: json['category']?.toString() ?? 'General',
       partOptions: opts,
     );
   }

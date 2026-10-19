@@ -9,7 +9,7 @@ import 'mock_data_service.dart';
 
 class ApiService {
   // ✅ Render Live Backend URL
-  static const String baseUrl = 'https://instafix-backend.onrender.com/api';
+  static const String baseUrl = 'https://instafix-backend-nfpz.onrender.com/api';
 
   static String? authToken;
 
@@ -272,6 +272,24 @@ class ApiService {
       }
     } catch (_) {}
     return MockDataService.services;
+  }
+
+  // ─── Fetch Model-Specific Services ───────────────────────────────────────────
+  /// Returns only the services the admin has configured for the given brand+model.
+  /// Falls back to getServices() if the endpoint fails (backward-compat).
+  static Future<List<RepairService>> getModelServices(int brandId, int modelId) async {
+    try {
+      final url = '$baseUrl/brands/$brandId/models/$modelId/services';
+      final res = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final List list = jsonDecode(res.body);
+        return list.map((item) => RepairService.fromJson(item)).toList();
+      }
+    } catch (_) {}
+    // Fallback: return all services so the app never breaks
+    return getServices();
   }
 
   // ─── Bookings / Jobs API ───────────────────────────────────────────────────
